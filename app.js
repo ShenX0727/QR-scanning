@@ -1,41 +1,31 @@
 const $ = id => document.getElementById(id);
 const drop = $('drop');
-const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
+const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 const enc = encodeURIComponent;
 
-const APPS = [
-  { name: '微信', color: '#07c160', hosts: ['weixin.qq.com', 'wx.qq.com', 'u.wechat.com', 'wx.tenpay.com', 'work.weixin.qq.com', 'mp.weixin.qq.com'],
-    scheme: () => 'weixin://', tip: '微信链接通常需在微信内打开，可复制后发给自己，或用微信扫一扫' },
-  { name: '支付宝', color: '#1677ff', hosts: ['alipay.com', 'alipay.cn'],
-    scheme: u => 'alipays://platformapi/startapp?saId=10000007&qrcode=' + enc(u) },
-  { name: '淘宝', color: '#ff5000', hosts: ['taobao.com', 'tb.cn', 'tmall.com'],
-    scheme: u => 'taobao://' + u.replace(/^https?:\/\//, '') },
-  { name: '京东', color: '#e1251b', hosts: ['jd.com', '3.cn'],
-    scheme: u => 'openapp.jdmobile://virtual?params=' + enc(JSON.stringify({ category: 'jump', des: 'm', url: u })) },
-  { name: '拼多多', color: '#e02e24', hosts: ['yangkeduo.com', 'pinduoduo.com'] },
-  { name: '抖音', color: '#161823', hosts: ['douyin.com', 'iesdouyin.com'] },
-  { name: '快手', color: '#ff4906', hosts: ['kuaishou.com', 'chenzhongtech.com'] },
-  { name: '哔哩哔哩', color: '#fb7299', hosts: ['bilibili.com', 'b23.tv'] },
-  { name: '小红书', color: '#ff2442', hosts: ['xiaohongshu.com', 'xhslink.com'] },
-  { name: '微博', color: '#e6162d', hosts: ['weibo.com', 'weibo.cn'],
-    scheme: u => 'sinaweibo://browser?url=' + enc(u) },
-  { name: 'QQ', color: '#12b7f5', hosts: ['qm.qq.com', 'im.qq.com', 'ti.qq.com'] },
-  { name: '钉钉', color: '#3296fa', hosts: ['dingtalk.com'],
-    scheme: u => 'dingtalk://dingtalkclient/page/link?url=' + enc(u) },
-  { name: '飞书', color: '#3370ff', hosts: ['feishu.cn', 'larksuite.com'] },
-  { name: '美团', color: '#ffc300', hosts: ['meituan.com', 'dianping.com'] },
-  { name: '知乎', color: '#1772f6', hosts: ['zhihu.com'] },
-  { name: '网易云音乐', color: '#e60026', hosts: ['music.163.com', '163cn.tv'] },
-  { name: 'GitHub', color: '#24292f', hosts: ['github.com'] },
-  { name: 'YouTube', color: '#ff0000', hosts: ['youtube.com', 'youtu.be'] },
-];
+const SAFE_SCHEMES = /^(https?|tel|mailto|sms|smsto|geo|weixin|alipays?|taobao|tmall|openapp\.jdmobile|snssdk\d+|bilibili|sinaweibo|mqq\w*|dingtalk|xhsdiscover|zhihu|orpheus|lark|imeituan|pinduoduo|kwai|whatsapp|tg|line|kakaotalk|fb|instagram|twitter|spotify|zoomus|market|itms-apps|steam):/i;
+const SHORT = ['t.cn', 'url.cn', 'dwz.cn', 'b23.tv', 'v.douyin.com', 'xhslink.com', 'tb.cn', 'm.tb.cn', '3.cn', 'suo.im', 'bit.ly', 't.co', 'tinyurl.com', 'v.kuaishou.com', '163cn.tv', 'goo.gl', 'is.gd', 'ow.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at', 'amzn.to', 'a.co', 'lnkd.in', 'pin.it', 'redd.it', 'youtu.be', 's.team', 'apple.co', 'db.tt', '1drv.ms', 'shp.ee', 'abnb.me', 'flic.kr', 'nico.ms', 'g.co'];
 
-const SAFE_SCHEMES = /^(https?|tel|mailto|sms|smsto|geo|weixin|alipays?|taobao|tmall|openapp\.jdmobile|snssdk\d+|bilibili|sinaweibo|mqq\w*|dingtalk|xhsdiscover|zhihu|orpheus|lark|imeituan|pinduoduo|kwai):/i;
+const BY_HOST = new Map();
+const BY_WILD = [];
+for (const a of APPS) for (const h of a.hosts) {
+  if (h.endsWith('.*')) BY_WILD.push([h.slice(0, -2), a]);
+  else BY_HOST.set(h, a);
+}
 
 function matchApp(url) {
   let host;
-  try { host = new URL(url).hostname.toLowerCase(); } catch { return null; }
-  return APPS.find(a => a.hosts.some(h => host === h || host.endsWith('.' + h))) || null;
+  try { host = new URL(url).hostname.toLowerCase().replace(/\.$/, ''); } catch { return null; }
+  const parts = host.split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const hit = BY_HOST.get(parts.slice(i).join('.'));
+    if (hit) return hit;
+  }
+  for (const [label, a] of BY_WILD) {
+    const i = parts.indexOf(label);
+    if (i >= 0 && i >= parts.length - 3 && i < parts.length - 1) return a;
+  }
+  return null;
 }
 
 function parseWifi(s) {
@@ -47,66 +37,85 @@ function analyze(text) {
   const t = text.trim();
   if (/^WIFI:/i.test(t)) {
     const w = parseWifi(t);
-    return { kind: 'Wi-Fi', show: `名称：${w.ssid}\n密码：${w.pass || '（无）'}\n加密：${w.type}`, copy: w.pass || w.ssid,
-      app: { name: '连接 Wi-Fi', color: '#34c759', tip: '已可复制密码，到系统设置里连接即可' } };
+    return { show: `名称 ${w.ssid}\n密码 ${w.pass || '无'}\n加密 ${w.type}`, copy: w.pass || w.ssid,
+      app: { name: 'Wi-Fi：' + w.ssid, icon: 'W', color: '#34c759', tip: '复制密码后，去系统设置里连接' } };
   }
-  if (/^BEGIN:VCARD/i.test(t)) return { kind: '名片', show: t, copy: t, app: { name: '通讯录', color: '#8e8e93', tip: '复制后可粘贴到通讯录' } };
-  if (/^tel:/i.test(t)) return { kind: '电话', show: t.slice(4), copy: t.slice(4), open: t, app: { name: '电话', color: '#34c759' } };
-  if (/^mailto:/i.test(t)) return { kind: '邮箱', show: t.slice(7), copy: t.slice(7), open: t, app: { name: '邮件', color: '#1a73e8' } };
+  if (/^BEGIN:VCARD/i.test(t)) {
+    const fn = (t.match(/\nFN[^:]*:(.*)/i) || [])[1] || '联系人';
+    return { show: t, copy: t, app: { name: fn.trim(), icon: '名', color: '#8e8e93', tip: '名片，复制后可存进通讯录' } };
+  }
+  if (/^tel:/i.test(t)) return { show: t.slice(4), copy: t.slice(4), open: t, app: { name: '电话', color: '#34c759', tip: t.slice(4) } };
+  if (/^mailto:/i.test(t)) return { show: t.slice(7), copy: t.slice(7), open: t, app: { name: '邮件', color: '#1a73e8', tip: t.slice(7).split('?')[0] } };
   if (/^smsto?:/i.test(t)) {
     const [, num, body = ''] = t.split(':');
-    return { kind: '短信', show: num + (body ? '\n' + body : ''), copy: body || num, open: `sms:${num}${body ? '?body=' + enc(body) : ''}`, app: { name: '短信', color: '#34c759' } };
+    return { show: num + (body ? '\n' + body : ''), copy: body || num, open: `sms:${num}${body ? '?body=' + enc(body) : ''}`, app: { name: '短信', color: '#34c759', tip: num } };
   }
+  if (/^geo:/i.test(t)) return { show: t.slice(4), copy: t.slice(4), open: t, app: { name: '地图位置', color: '#30b0c7', tip: '用地图 App 打开' } };
 
   let url = t;
-  if (/^(www\.)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(t) && !/^https?:/i.test(t)) url = 'https://' + t;
+  if (!/^https?:/i.test(t) && /^(www\.)?[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/i.test(t)) url = 'https://' + t;
 
   if (/^https?:\/\//i.test(url)) {
     const app = matchApp(url);
     if (app) {
       const scheme = app.scheme && isMobile ? app.scheme(url) : null;
-      return { kind: '链接', show: url, copy: url, open: scheme || url, browser: scheme ? url : null,
-        app: { ...app, tip: app.tip || (isMobile ? `推荐用${app.name}打开` : `推荐用${app.name}打开，在手机上可直接唤起 App`) } };
+      return { show: url, copy: url, open: scheme || url, browser: scheme ? url : null, openText: `用${app.name}打开`,
+        app: { ...app, tip: app.tip || (app.scheme && !isMobile ? hostOf(url) + ' · 手机上可直接跳进 App' : hostOf(url)) } };
     }
-    return { kind: '链接', show: url, copy: url, open: url, app: { name: '浏览器', color: '#5f6368', tip: '普通网页，直接在浏览器打开即可' } };
+    return { show: url, copy: url, open: url, app: { name: '网页', icon: '↗', color: '#5f6368', tip: '没认出是哪个 App，用浏览器打开' } };
   }
 
-  if (SAFE_SCHEMES.test(t)) return { kind: 'App 链接', show: t, copy: t, open: t, app: { name: '对应 App', color: '#5f6368', tip: '这是 App 专用链接，需在手机上打开' } };
-  return { kind: '文本', show: t, copy: t, app: null };
+  if (SAFE_SCHEMES.test(t)) return { show: t, copy: t, open: t, app: { name: 'App 专用链接', icon: '⌁', color: '#5f6368', tip: '需要在装了对应 App 的手机上打开' } };
+  return { show: t, copy: t, app: { name: '一段文字', icon: '文', color: '#5f6368', tip: '不是链接，可以直接复制' } };
+}
+
+function hostOf(s) {
+  try { return /^https?:/i.test(s) ? new URL(s).hostname : ''; } catch { return ''; }
+}
+
+function safety(url, host) {
+  if (!host) return null;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return ['warn', 'IP 地址'];
+  if (SHORT.includes(host)) return ['warn', '短链接'];
+  if (/^http:/i.test(url)) return ['warn', '未加密'];
+  return ['ok', 'HTTPS'];
+}
+
+function tone(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+  return l < 0.42 || l > 0.86 ? 'var(--ink)' : hex;
+}
+
+function glyph(name) {
+  const m = name.match(/[一-鿿]|[A-Za-z0-9]/);
+  return m ? m[0].toUpperCase() : name[0];
 }
 
 function render(text) {
   const r = analyze(text);
-  $('kind').textContent = r.kind;
   $('content').textContent = r.show;
-  let host = '';
-  try { host = /^https?:/i.test(r.copy) ? new URL(r.copy).hostname : ''; } catch {}
-  $('host').textContent = host;
-  const sf = safety(r.copy, host);
-  $('safety').hidden = !sf;
-  if (sf) { $('safety').textContent = sf[1]; $('safety').className = 'safety ' + sf[0]; }
-  $('readout').textContent = '已识别 · ' + r.kind;
+  $('appIcon').textContent = r.app.icon || glyph(r.app.name);
+  $('appIcon').style.color = tone(r.app.color);
+  $('appName').textContent = r.app.name;
+  $('appTip').textContent = r.app.tip || '';
 
-  $('app').hidden = !r.app;
-  if (r.app) {
-    $('appIcon').textContent = r.app.name[0];
-    $('appIcon').style.color = tone(r.app.color);
-    $('appName').textContent = r.app.name;
-    $('appTip').textContent = r.app.tip || '';
-  }
+  const sf = safety(r.copy, hostOf(r.copy));
+  $('safety').hidden = !sf;
+  if (sf) { $('safety').textContent = sf[1]; $('safety').className = 'tag ' + sf[0]; }
 
   const open = r.open && SAFE_SCHEMES.test(r.open) ? r.open : null;
   $('openBtn').hidden = !open;
   if (open) {
     $('openBtn').href = open;
-    $('openBtn').textContent = r.app && r.app.name !== '浏览器' && r.app.name !== '对应 App' ? `用${r.app.name}打开` : '打开';
+    $('openBtn').textContent = r.openText || '打开';
   }
   $('browserBtn').hidden = !r.browser;
   if (r.browser) $('browserBtn').href = r.browser;
 
   $('copyBtn').onclick = () => copy(r.copy);
+  $('empty').hidden = true;
   $('result').hidden = false;
-  $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function copy(s) {
@@ -117,22 +126,8 @@ async function copy(s) {
     document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
   }
   msg('已复制');
-}
-
-const SHORT = ['t.cn', 'url.cn', 'dwz.cn', 'b23.tv', 'v.douyin.com', 'xhslink.com', 'tb.cn', 'm.tb.cn', '3.cn', 'suo.im', 'bit.ly', 't.co', 'tinyurl.com', 'v.kuaishou.com', '163cn.tv'];
-
-function safety(url, host) {
-  if (!host) return null;
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return ['warn', 'IP 地址，谨慎打开'];
-  if (SHORT.includes(host)) return ['warn', '短链接，会跳转'];
-  if (/^http:/i.test(url)) return ['warn', '未加密'];
-  return ['ok', 'HTTPS'];
-}
-
-function tone(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  const l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
-  return l < 0.42 ? 'var(--ink)' : hex;
+  clearTimeout(copy.t);
+  copy.t = setTimeout(() => msg(''), 1600);
 }
 
 function msg(s, err) {
@@ -141,7 +136,7 @@ function msg(s, err) {
 }
 
 function state(name) {
-  drop.classList.remove('busy', 'done', 'fail');
+  drop.classList.remove('done', 'fail');
   if (name) drop.classList.add(name);
 }
 
@@ -181,32 +176,75 @@ async function decode(img) {
 }
 
 async function handle(blob) {
-  if (!blob || !blob.type.startsWith('image/')) return msg('这不是图片，请换一张含二维码的图片', true);
-  try {
-    show(await loadImage(blob));
-  } catch {
-    state('fail');
-    msg('图片读取失败，请换一张试试', true);
-  }
-}
-
-async function show(img) {
+  if (!blob || !blob.type.startsWith('image/')) return msg('这不是图片，换一张试试', true);
+  let img;
+  try { img = await loadImage(blob); } catch { state('fail'); return msg('图片打不开，换一张试试', true); }
   msg('');
-  state('busy');
+  state();
   $('result').hidden = true;
+  $('empty').hidden = false;
   $('preview').src = img.src;
   $('preview').hidden = false;
   $('hint').hidden = true;
-  $('readout').textContent = '识别中…';
   const text = await decode(img);
   if (!text) {
     state('fail');
-    $('readout').textContent = '未找到二维码';
-    return msg('没找到二维码，换一张更清晰、二维码更完整的图片试试', true);
+    return msg('没找到二维码，换张清楚点的', true);
   }
   state('done');
   render(text);
 }
+
+function liquid(el) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let box = null, id = null;
+  const move = e => {
+    if (e.pointerId !== id) return;
+    const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+    const dx = Math.max(-1.8, Math.min(1.8, (e.clientX - cx) / (box.width / 2)));
+    const dy = Math.max(-1.8, Math.min(1.8, (e.clientY - cy) / (box.height / 2)));
+    const pullX = Math.max(0, Math.abs(dx) - 1), pullY = Math.max(0, Math.abs(dy) - 1);
+    const sx = 0.93 + Math.abs(dx) * 0.05 + pullX * 0.24 - pullY * 0.08;
+    const sy = 0.88 + Math.abs(dy) * 0.07 + pullY * 0.34 - pullX * 0.1;
+    el.style.transform = `translate(${dx * 5 + Math.sign(dx) * pullX * 16}px, ${dy * 4 + Math.sign(dy) * pullY * 12}px) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
+    el.style.setProperty('--mx', ((e.clientX - box.left) / box.width * 100) + '%');
+    el.style.setProperty('--my', ((e.clientY - box.top) / box.height * 100) + '%');
+    el.style.setProperty('--ox', (dx < 0 ? 100 : 0) + '%');
+    el.style.setProperty('--oy', (dy < 0 ? 100 : 0) + '%');
+  };
+  const end = e => {
+    if (e.pointerId !== id) return;
+    id = null;
+    el.classList.remove('pressed');
+    el.style.removeProperty('--ox');
+    el.style.removeProperty('--oy');
+    el.style.transform = '';
+  };
+  el.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    id = e.pointerId;
+    el.style.transform = '';
+    box = el.getBoundingClientRect();
+    try { el.setPointerCapture(id); } catch {}
+    el.classList.add('pressed');
+    move(e);
+  });
+  el.addEventListener('pointermove', e => {
+    if (id === null) {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100) + '%');
+      el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100) + '%');
+      return;
+    }
+    move(e);
+  });
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('lostpointercapture', end);
+}
+
+document.querySelectorAll('.btn').forEach(liquid);
+$('count').textContent = `认得 ${APPS.length} 个应用`;
 
 document.addEventListener('paste', e => {
   const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
@@ -222,11 +260,10 @@ $('pasteBtn').onclick = async () => {
     }
     msg('剪贴板里没有图片', true);
   } catch {
-    msg('浏览器没有允许读取剪贴板，请直接按 Ctrl+V 粘贴', true);
+    msg(isMobile ? '浏览器不让读剪贴板，请点「选择图片」' : '浏览器不让读剪贴板，直接按 Ctrl+V 吧', true);
   }
 };
 
-$('sampleBtn').onclick = () => show($('sample'));
 $('pickBtn').onclick = () => $('file').click();
 $('file').onchange = e => { handle(e.target.files[0]); e.target.value = ''; };
 
@@ -237,12 +274,3 @@ drop.addEventListener('drop', e => {
   drop.classList.remove('over');
   handle(e.dataTransfer.files[0]);
 });
-
-$('appList').append(...APPS.filter(a => !['GitHub', 'YouTube', '网易云音乐'].includes(a.name)).map(a => {
-  const li = document.createElement('li');
-  li.title = a.name;
-  li.innerHTML = '<span></span>';
-  li.firstChild.textContent = a.name === '哔哩哔哩' ? 'B' : a.name[0];
-  li.style.setProperty('--c', tone(a.color));
-  return li;
-}));
