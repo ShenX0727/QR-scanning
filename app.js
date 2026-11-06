@@ -82,11 +82,15 @@ function render(text) {
   let host = '';
   try { host = /^https?:/i.test(r.copy) ? new URL(r.copy).hostname : ''; } catch {}
   $('host').textContent = host;
+  const sf = safety(r.copy, host);
+  $('safety').hidden = !sf;
+  if (sf) { $('safety').textContent = sf[1]; $('safety').className = 'safety ' + sf[0]; }
+  $('readout').textContent = '已识别 · ' + r.kind;
 
   $('app').hidden = !r.app;
   if (r.app) {
     $('appIcon').textContent = r.app.name[0];
-    $('appIcon').style.background = r.app.color;
+    $('appIcon').style.color = tone(r.app.color);
     $('appName').textContent = r.app.name;
     $('appTip').textContent = r.app.tip || '';
   }
@@ -113,6 +117,22 @@ async function copy(s) {
     document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
   }
   msg('已复制');
+}
+
+const SHORT = ['t.cn', 'url.cn', 'dwz.cn', 'b23.tv', 'v.douyin.com', 'xhslink.com', 'tb.cn', 'm.tb.cn', '3.cn', 'suo.im', 'bit.ly', 't.co', 'tinyurl.com', 'v.kuaishou.com', '163cn.tv'];
+
+function safety(url, host) {
+  if (!host) return null;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return ['warn', 'IP 地址，谨慎打开'];
+  if (SHORT.includes(host)) return ['warn', '短链接，会跳转'];
+  if (/^http:/i.test(url)) return ['warn', '未加密'];
+  return ['ok', 'HTTPS'];
+}
+
+function tone(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const l = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+  return l < 0.42 ? 'var(--ink)' : hex;
 }
 
 function msg(s, err) {
@@ -177,9 +197,11 @@ async function show(img) {
   $('preview').src = img.src;
   $('preview').hidden = false;
   $('hint').hidden = true;
+  $('readout').textContent = '识别中…';
   const text = await decode(img);
   if (!text) {
     state('fail');
+    $('readout').textContent = '未找到二维码';
     return msg('没找到二维码，换一张更清晰、二维码更完整的图片试试', true);
   }
   state('done');
@@ -215,3 +237,12 @@ drop.addEventListener('drop', e => {
   drop.classList.remove('over');
   handle(e.dataTransfer.files[0]);
 });
+
+$('appList').append(...APPS.filter(a => !['GitHub', 'YouTube', '网易云音乐'].includes(a.name)).map(a => {
+  const li = document.createElement('li');
+  li.title = a.name;
+  li.innerHTML = '<span></span>';
+  li.firstChild.textContent = a.name === '哔哩哔哩' ? 'B' : a.name[0];
+  li.style.setProperty('--c', tone(a.color));
+  return li;
+}));
