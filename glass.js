@@ -27,10 +27,8 @@ float field(vec2 p, out float prim) {
     vec2 q0 = p - uBox[i].xy - uXf[i].xy;
     vec2 sq = uSq[i];
     float ms = min(sq.x, sq.y);
-    vec2 v = uXf[i].zw;
-    vec2 av = sqrt(v * v + 0.25) - 0.5;
-    vec2 hb = uBox[i].zw + av * 0.5;
-    float di = sdBox((q0 - v * 0.5) / sq, hb, min(hb.x, hb.y)) * ms;
+    vec2 hb = uBox[i].zw + uXf[i].zw;
+    float di = sdBox(q0 / sq, hb, min(hb.x, hb.y)) * ms;
     float w = 1.0 / (1.0 + exp(clamp(di / 6.0, -20.0, 20.0)));
     ws += w;
     ps += w * uPrim[i];
@@ -131,10 +129,11 @@ void main() {
     const ux = L > 1e-5 ? c.vx / L : 0, uy = L > 1e-5 ? c.vy / L : 0;
     const reach = 16 * L;
     const k = reach / (reach + 10);
-    const sx = (1 - 0.012 * c.pr) * (1 - 0.04 * k * uy * uy);
+    const sx = (1 - 0.012 * c.pr) * (1 - 0.06 * k * uy * uy);
     const sy = (1 - 0.03 * c.pr) * (1 - 0.08 * k * ux * ux);
     const vx = ux * reach, vy = uy * reach;
-    return { sx, sy, ox: -vx * 0.3, oy: -vy * 0.3, vx, vy };
+    const sa = v => Math.sqrt(v * v + 0.25) - 0.5;
+    return { sx, sy, ox: vx * 0.55, oy: vy * 0.55, ex: sa(vx) * 0.3, ey: sa(vy) * 0.1 };
   }
 
   function makeGroup(host) {
@@ -188,12 +187,12 @@ void main() {
         b.t = t;
         if (b.active) {
           box.set([b.cx, b.cy, b.w / 2, b.h / 2], i * 4);
-          tr.set([t.ox, t.oy, t.vx, t.vy], i * 4);
+          tr.set([t.ox, t.oy, t.ex, t.ey], i * 4);
           sq.set([t.sx, t.sy], i * 2);
         }
         prim[i] = b.primary ? 1 : 0;
         press = Math.max(press, b.cur.pr);
-        b.lbl.style.transform = `translate3d(${(t.ox + t.vx * 0.5).toFixed(2)}px, ${(t.oy + t.vy * 0.5).toFixed(2)}px, 0)`;
+        b.lbl.style.transform = `translate3d(${(t.ox * 0.9).toFixed(2)}px, ${(t.oy * 0.9).toFixed(2)}px, 0)`;
       });
       gl.viewport(0, 0, cv.width, cv.height);
       gl.uniform2f(U.uCanvas, G.w + M * 2, G.h + M * 2);
@@ -297,9 +296,9 @@ void main() {
       for (const o of G.btns) {
         if (o === held || !o.active) continue;
         const to = xf(o);
-        const dx = (o.cx + to.ox + to.vx / 2) - (held.cx + th.ox + th.vx / 2), dy = (o.cy + to.oy + to.vy / 2) - (held.cy + th.oy + th.vy / 2);
-        const gx = Math.abs(dx) - (held.w / 2 * th.sx + Math.abs(th.vx) / 2 + o.w / 2 * to.sx + Math.abs(to.vx) / 2);
-        const gy = Math.abs(dy) - (held.h / 2 * th.sy + Math.abs(th.vy) / 2 + o.h / 2 * to.sy + Math.abs(to.vy) / 2);
+        const dx = (o.cx + to.ox) - (held.cx + th.ox), dy = (o.cy + to.oy) - (held.cy + th.oy);
+        const gx = Math.abs(dx) - ((held.w / 2 + th.ex) * th.sx + (o.w / 2 + to.ex) * to.sx);
+        const gy = Math.abs(dy) - ((held.h / 2 + th.ey) * th.sy + (o.h / 2 + to.ey) * to.sy);
         const gap = Math.max(gx, gy);
         const rest = Math.max(Math.abs(o.cx - held.cx) - (held.w + o.w) / 2, Math.abs(o.cy - held.cy) - (held.h + o.h) / 2);
         const start = rest, full = rest - 8;
