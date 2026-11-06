@@ -221,6 +221,7 @@ kbd {
 .btn.pressed { z-index: 2; }
 .gl .btn.primary { color: #fff; }
 .gl .btn.primary.copied, .gl .btn.copied { color: var(--ok); }
+.glass-group { position: relative; isolation: isolate; }
 .glass {
   position: absolute; z-index: -1; pointer-events: none;
   left: -44px; top: -44px; width: calc(100% + 88px); height: calc(100% + 88px);
