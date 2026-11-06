@@ -2,45 +2,66 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3f5f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1413" media="(prefers-color-scheme: dark)">
 <title>二维码识别</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <h1>二维码识别</h1>
-  <p class="sub">粘贴、拖入或选择一张含二维码的图片</p>
+  <header class="top">
+    <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div>
+      <h1>二维码识别</h1>
+      <p class="sub">粘贴截图，看清二维码背后是什么，再决定用哪个 App 打开</p>
+    </div>
+  </header>
 
-  <label id="drop" class="drop" tabindex="0">
+  <label id="drop" class="finder" tabindex="0" aria-label="拖入或选择二维码图片">
     <input id="file" type="file" accept="image/*" hidden>
-    <img id="preview" alt="" hidden>
-    <span id="hint">按 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴，或点击选择图片</span>
+    <span class="corner tl"></span><span class="corner tr"></span>
+    <span class="corner bl"></span><span class="corner br"></span>
+    <span class="beam" aria-hidden="true"></span>
+    <img id="preview" alt="待识别的图片" hidden>
+    <span id="hint" class="hint">
+      <strong>把二维码图片拖到这里</strong>
+      <span>或按 <kbd>Ctrl</kbd> <kbd>V</kbd> 粘贴截图</span>
+    </span>
   </label>
 
   <div class="actions">
-    <button id="pasteBtn" type="button">从剪贴板读取</button>
-    <button id="pickBtn" type="button" class="ghost">选择图片</button>
+    <button id="pasteBtn" type="button" class="btn primary">从剪贴板读取</button>
+    <button id="pickBtn" type="button" class="btn">选择图片</button>
   </div>
+  <p class="tryline">没有图片？<button id="sampleBtn" type="button" class="link">用示例试试</button></p>
 
-  <section id="result" hidden>
-    <div class="label" id="kind"></div>
-    <div class="content" id="content"></div>
-    <div class="app" id="app" hidden>
-      <span class="app-icon" id="appIcon"></span>
-      <div>
-        <div class="app-name" id="appName"></div>
-        <div class="app-tip" id="appTip"></div>
+  <p id="msg" class="msg" role="status"></p>
+
+  <section id="result" class="result" hidden>
+    <div class="result-head">
+      <span id="kind" class="chip"></span>
+      <span id="host" class="host"></span>
+    </div>
+    <div id="content" class="content"></div>
+    <div id="app" class="app" hidden>
+      <span id="appIcon" class="app-icon"></span>
+      <div class="app-text">
+        <div class="app-label">推荐打开方式</div>
+        <div id="appName" class="app-name"></div>
+        <div id="appTip" class="app-tip"></div>
       </div>
     </div>
     <div class="actions">
-      <a id="openBtn" class="btn" target="_blank" rel="noopener noreferrer">打开</a>
-      <a id="browserBtn" class="btn ghost" target="_blank" rel="noopener noreferrer" hidden>用浏览器打开</a>
-      <button id="copyBtn" type="button" class="ghost">复制</button>
+      <a id="openBtn" class="btn primary" target="_blank" rel="noopener noreferrer">打开</a>
+      <a id="browserBtn" class="btn" target="_blank" rel="noopener noreferrer" hidden>用浏览器打开</a>
+      <button id="copyBtn" type="button" class="btn">复制</button>
     </div>
   </section>
 
-  <p id="msg" class="msg"></p>
+  <footer class="foot">图片只在你的浏览器里识别，不会上传到任何地方</footer>
 </main>
+<img id="sample" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAADwCAYAAAA+VemSAAAAAklEQVR4AewaftIAAAavSURBVO3BgW0dSxIEwazG89/luu/A7AEjLsWmMiL9D5JWGiStNUhaa5C01iBprUHSWoOktQZJaw2S1hokrTVIWmuQtNYgaa1B0lqDpLU+/IEk/BZtOUnCT9OWkySctOUNSThpyxuS8Fu05cYgaa1B0lqDpLUGSWsNktYaJK314SVt+WmS8NXa8iQJJ215Q1vekISTtpwk4aQtb2jLT5OErzZIWmuQtNYgaa1B0lqDpLUGSWsNktb68Jck4au15adpy40k3GrLG9pykoQbSXjSljck4au15bsNktYaJK01SFprkLTWIGmtQdJaH/R/teVWEm605UkSbiThVltO2nIjCbo3SFprkLTWIGmtQdJag6S1BklrfdD/lYRbbTlJwkkSbiXhpC0nSXhDEk7aonuDpLUGSWsNktYaJK01SFprkLTWh7+kLVu05bu15bu15UkSbrTlp2nLbzBIWmuQtNYgaa1B0lqDpLUGSWsNktb68JIk/BZJOGnLkySctOUkCU/acpKEk7acJOFJW06ScCMJT9pyIwn/gkHSWoOktQZJaw2S1hokrTVIWiv9D/orknDSlidJOGnLd0vCG9qis0HSWoOktQZJaw2S1hokrTVIWuvDH0jCSVtuJWGLtjxJwklbbrXlJAk/SVtuJeGkLbeScNKWkyS8oS03BklrDZLWGiStNUhaa5C01iBprQ9/oC0nSXjSlpO2nCThVltOkvCGtpwk4SdpyxuScNKWNyThp2nLVxskrTVIWmuQtNYgaa1B0lqDpLUGSWt9+ANJOGnLkyR8tySctOUNSThpy0kSbrXlJAknSXhDW261ZYu2fLdB0lqDpLUGSWsNktYaJK01SFrrw1/SlpMknLTlJAlP2nKShJO2nCThSVtOknDSlt8iCSdteZKEN7TlJAknbbmVhJO23BgkrTVIWmuQtNYgaa1B0lqDpLU+/IG2nCThDUm4lYSTtpwk4aQt/4q2nCThDW05ScIb2rLFIGmtQdJag6S1BklrDZLWGiStNUha68Nf0paTJLyhLSdJOGnLrSSctOVWEn6Stpwk4adJwm8wSFprkLTWIGmtQdJag6S1BklrfXhJW54k4UZbbiXhpC0nSThpy9/QlpMk3GjLkySctOVGEt7QlidJOGnLSRJO2vIkCV9tkLTWIGmtQdJag6S1BklrDZLW+vAHkvDdknDSlidt+W5tOUnCrbactOUkCSdJeNKWr9aWNyThXzBIWmuQtNYgaa1B0lqDpLUGSWt9+ANtuZWEG205ScKtttxIwpO2fLckfLck3EjCrbactOVWEk7acqstX22QtNYgaa1B0lqDpLUGSWsNktYaJK314Q8k4aQtb0jCrbacJOGkLW9oy60knLTlJAknbXmShJO2nCThpC1/QxJO2nKShFtt+WqDpLUGSWsNktYaJK01SFprkLTWh5ck4UlbTpJwoy1PknDSlpMknLTlSRJutOVJW75bW06S8Fsk4aQtt5Jw0pYbg6S1BklrDZLWGiStNUhaa5C01ocfqC03kvCkLSdJ+C2ScNKWkyQ8actPkoSTtjxpy0kSTpJw0pYnbflqg6S1BklrDZLWGiStNUhaa5C01odlknDSlidJuNGW75aEnyYJN9pykoQ3JOG7JeFJW77aIGmtQdJag6S1BklrDZLWGiStNUhaK/0PepSEN7TlDUl4Q1u+WhKetOUNSbjRlp9kkLTWIGmtQdJag6S1BklrDZLW+vAHkvBbtOVGW54k4UYSnrTlq7XlDUl4QxJO2vIvGCStNUhaa5C01iBprUHSWoOktT68pC0/TRK+W1u2SMKttny3tryhLW9IwklbbgyS1hokrTVIWmuQtNYgaa1B0lqDpLU+/CVJ+Gpt2SQJJ215koSv1pZbSXhDEr5bEk7acpKEJ235aoOktQZJaw2S1hokrTVIWmuQtNYH/ZEkPGnLSVve0JYbSXhDW24l4aQtP0lbniThpC03BklrDZLWGiStNUhaa5C01iBprQ/6v9pykoQnSThpyxuScKMtT5Jw0pYbSXhDEm615SQJP8kgaa1B0lqDpLUGSWsNktYaJK314S9py78uCSdtudWWG0l40pav1pZbSbjVlpMk3GjLkyR8tUHSWoOktQZJaw2S1hokrTVIWmuQtNaHlyTht0jCrbbcSMKTttxIwq0knLTlJAm32nKjLU+ScNKWN7Tlqw2S1hokrTVIWmuQtNYgaa1B0lrpf5C00iBprUHSWoOktQZJaw2S1hokrTVIWmuQtNYgaa1B0lqDpLUGSWsNktb6HzvUP/3ZqGZaAAAAAElFTkSuQmCC" alt="" hidden>
 <script src="jsQR.js"></script>
 <script src="app.js"></script>
 </body>

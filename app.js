@@ -1,4 +1,5 @@
 const $ = id => document.getElementById(id);
+const drop = $('drop');
 const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS/i.test(navigator.userAgent);
 const enc = encodeURIComponent;
 
@@ -78,7 +79,9 @@ function render(text) {
   const r = analyze(text);
   $('kind').textContent = r.kind;
   $('content').textContent = r.show;
-  $('content').style.whiteSpace = 'pre-wrap';
+  let host = '';
+  try { host = /^https?:/i.test(r.copy) ? new URL(r.copy).hostname : ''; } catch {}
+  $('host').textContent = host;
 
   $('app').hidden = !r.app;
   if (r.app) {
@@ -114,7 +117,12 @@ async function copy(s) {
 
 function msg(s, err) {
   $('msg').textContent = s;
-  $('msg').className = 'msg' + (err ? ' err' : '');
+  $('msg').className = 'msg' + (err ? ' err' : s ? ' ok' : '');
+}
+
+function state(name) {
+  drop.classList.remove('busy', 'done', 'fail');
+  if (name) drop.classList.add(name);
 }
 
 function loadImage(blob) {
@@ -153,21 +161,29 @@ async function decode(img) {
 }
 
 async function handle(blob) {
-  if (!blob || !blob.type.startsWith('image/')) return msg('请提供图片', true);
-  msg('识别中…');
-  $('result').hidden = true;
+  if (!blob || !blob.type.startsWith('image/')) return msg('这不是图片，请换一张含二维码的图片', true);
   try {
-    const img = await loadImage(blob);
-    $('preview').src = img.src;
-    $('preview').hidden = false;
-    $('hint').hidden = true;
-    const text = await decode(img);
-    if (!text) return msg('没有识别到二维码，换一张更清晰的图片试试', true);
-    msg('');
-    render(text);
+    show(await loadImage(blob));
   } catch {
-    msg('图片读取失败', true);
+    state('fail');
+    msg('图片读取失败，请换一张试试', true);
   }
+}
+
+async function show(img) {
+  msg('');
+  state('busy');
+  $('result').hidden = true;
+  $('preview').src = img.src;
+  $('preview').hidden = false;
+  $('hint').hidden = true;
+  const text = await decode(img);
+  if (!text) {
+    state('fail');
+    return msg('没找到二维码，换一张更清晰、二维码更完整的图片试试', true);
+  }
+  state('done');
+  render(text);
 }
 
 document.addEventListener('paste', e => {
@@ -184,14 +200,14 @@ $('pasteBtn').onclick = async () => {
     }
     msg('剪贴板里没有图片', true);
   } catch {
-    msg('浏览器不允许直接读取剪贴板，请按 Ctrl+V（手机长按粘贴）', true);
+    msg('浏览器没有允许读取剪贴板，请直接按 Ctrl+V 粘贴', true);
   }
 };
 
+$('sampleBtn').onclick = () => show($('sample'));
 $('pickBtn').onclick = () => $('file').click();
 $('file').onchange = e => { handle(e.target.files[0]); e.target.value = ''; };
 
-const drop = $('drop');
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('over'));
 drop.addEventListener('drop', e => {
