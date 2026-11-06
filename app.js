@@ -108,7 +108,7 @@ function render(text) {
   $('openBtn').hidden = !open;
   if (open) {
     $('openBtn').href = open;
-    $('openBtn').textContent = r.openText || '打开';
+    label($('openBtn'), r.openText || '打开');
   }
   $('browserBtn').hidden = !r.browser;
   if (r.browser) $('browserBtn').href = r.browser;
@@ -116,6 +116,7 @@ function render(text) {
   $('copyBtn').onclick = () => copy(r.copy);
   $('empty').hidden = true;
   $('result').hidden = false;
+  window.glassRefresh?.();
 }
 
 async function copy(s) {
@@ -127,10 +128,10 @@ async function copy(s) {
   }
   const btn = $('copyBtn');
   btn.classList.add('copied');
-  btn.textContent = '已复制';
+  label(btn, '已复制');
   buzz(10);
   clearTimeout(copy.t);
-  copy.t = setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '复制'; }, 1400);
+  copy.t = setTimeout(() => { btn.classList.remove('copied'); label(btn, '复制'); }, 1400);
 }
 
 function msg(s, err) {
@@ -202,81 +203,6 @@ async function handle(blob) {
 
 const buzz = p => { try { navigator.vibrate?.(p); } catch {} };
 
-function liquid(el) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const rubber = v => v / (0.7 + Math.abs(v));
-  const cur = { x: 0, y: 0, sx: 1, sy: 1 };
-  const vel = { x: 0, y: 0, sx: 0, sy: 0 };
-  const goal = { x: 0, y: 0, sx: 1, sy: 1 };
-  let box = null, id = null, raf = 0, last = 0, px = 0, py = 0, ox = 0, oy = 0;
-
-  const aim = () => {
-    const ax = rubber((px - ox) / 60), ay = rubber((py - oy) / 40);
-    const nx = (ox - box.left - box.width / 2) / box.width, ny = (oy - box.top - box.height / 2) / box.height;
-    goal.x = ax * 14 + nx * 4;
-    goal.y = ay * 9 + ny * 3;
-    goal.sx = 0.96 + Math.abs(ax) * 0.13 - Math.abs(ay) * 0.04;
-    goal.sy = 0.92 + Math.abs(ay) * 0.17 - Math.abs(ax) * 0.06;
-    el.style.setProperty('--mx', (px - box.left) + 'px');
-    el.style.setProperty('--my', (py - box.top) + 'px');
-  };
-
-  const frame = t => {
-    const dt = Math.min(0.032, last ? (t - last) / 1000 : 0.008);
-    last = t;
-    const k = id === null ? 210 : 520, c = id === null ? 13 : 34;
-    let moving = false;
-    for (let step = 0, n = Math.ceil(dt / 0.004); step < n; step++) {
-      const h = dt / n;
-      for (const key in cur) {
-        vel[key] += (k * (goal[key] - cur[key]) - c * vel[key]) * h;
-        cur[key] += vel[key] * h;
-      }
-    }
-    for (const key in cur) {
-      const eps = key[0] === 's' ? 0.0005 : 0.02;
-      if (Math.abs(goal[key] - cur[key]) > eps || Math.abs(vel[key]) > eps) moving = true;
-    }
-    if (!moving) Object.assign(cur, goal);
-    el.style.transform = `translate3d(${cur.x.toFixed(2)}px, ${cur.y.toFixed(2)}px, 0) scale(${cur.sx.toFixed(4)}, ${cur.sy.toFixed(4)})`;
-    raf = moving || id !== null ? requestAnimationFrame(frame) : 0;
-    if (!raf) last = 0;
-  };
-  const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
-
-  el.addEventListener('pointerdown', e => {
-    if (e.button > 0) return;
-    id = e.pointerId;
-    box = el.getBoundingClientRect();
-    box = { left: box.left - cur.x, top: box.top - cur.y, width: box.width / cur.sx, height: box.height / cur.sy };
-    try { el.setPointerCapture(id); } catch {}
-    px = ox = e.clientX; py = oy = e.clientY;
-    aim();
-    el.classList.add('pressed');
-    buzz(6);
-    kick();
-  });
-  el.addEventListener('pointermove', e => {
-    if (e.pointerId !== id) return;
-    px = e.clientX; py = e.clientY;
-    aim();
-    kick();
-  }, { passive: true });
-  const end = e => {
-    if (e.pointerId !== id) return;
-    id = null;
-    el.classList.remove('pressed');
-    Object.assign(goal, { x: 0, y: 0, sx: 1, sy: 1 });
-    vel.sy -= 1.2;
-    vel.sx += 0.8;
-    kick();
-  };
-  el.addEventListener('pointerup', end);
-  el.addEventListener('pointercancel', end);
-  el.addEventListener('lostpointercapture', end);
-}
-
-document.querySelectorAll('.btn').forEach(liquid);
 $('count').textContent = `认得 ${APPS.length} 个应用`;
 
 document.addEventListener('paste', e => {
