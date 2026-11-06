@@ -27,11 +27,20 @@ float field(vec2 p, out float prim) {
     vec2 q0 = p - uBox[i].xy - uXf[i].xy;
     vec2 sq = uSq[i];
     float ms = min(sq.x, sq.y);
-    float di = 1e5;
-    for (int s = 0; s < 6; s++) {
-      vec2 q = (q0 - uXf[i].zw * (float(s) / 5.0)) / sq;
-      di = smin(di, sdBox(q, uBox[i].zw, uBox[i].w) * ms, 5.0);
+    vec2 v = uXf[i].zw;
+    float tb = 0.0;
+    if (dot(v, v) > 1e-4) {
+      float lo = 0.0, hi = 1.0;
+      float a1 = mix(lo, hi, 0.381966), a2 = mix(lo, hi, 0.618034);
+      float f1 = sdBox((q0 - v * a1) / sq, uBox[i].zw, uBox[i].w);
+      float f2 = sdBox((q0 - v * a2) / sq, uBox[i].zw, uBox[i].w);
+      for (int s = 0; s < 12; s++) {
+        if (f1 < f2) { hi = a2; a2 = a1; f2 = f1; a1 = mix(lo, hi, 0.381966); f1 = sdBox((q0 - v * a1) / sq, uBox[i].zw, uBox[i].w); }
+        else { lo = a1; a1 = a2; f1 = f2; a2 = mix(lo, hi, 0.618034); f2 = sdBox((q0 - v * a2) / sq, uBox[i].zw, uBox[i].w); }
+      }
+      tb = 0.5 * (lo + hi);
     }
+    float di = sdBox((q0 - v * tb) / sq, uBox[i].zw, uBox[i].w) * ms;
     float w = 1.0 / (1.0 + exp(clamp(di / 6.0, -20.0, 20.0)));
     ws += w;
     ps += w * uPrim[i];
@@ -130,10 +139,10 @@ void main() {
     const c = b.cur;
     const L = Math.hypot(c.vx, c.vy);
     const ux = L > 1e-5 ? c.vx / L : 0, uy = L > 1e-5 ? c.vy / L : 0;
-    const reach = 44 * L;
-    const k = Math.min(1, reach / 40);
-    const sx = (1 - 0.03 * c.pr) * (1 - 0.1 * k * uy * uy);
-    const sy = (1 - 0.07 * c.pr) * (1 - 0.2 * k * ux * ux);
+    const reach = 16 * L;
+    const k = reach / (reach + 10);
+    const sx = (1 - 0.012 * c.pr) * (1 - 0.04 * k * uy * uy);
+    const sy = (1 - 0.03 * c.pr) * (1 - 0.08 * k * ux * ux);
     const vx = ux * reach, vy = uy * reach;
     return { sx, sy, ox: -vx * 0.3, oy: -vy * 0.3, vx, vy };
   }
@@ -235,7 +244,7 @@ void main() {
     el.append(lbl);
     const b = {
       el, lbl, G, w: 0, h: 0, cx: 0, cy: 0, active: false, primary: el.classList.contains('primary'),
-      id: null, ox: 0, oy: 0, px: 0, py: 0, aimX: 0, aimY: 0, cancel: false,
+      id: null, ox: 0, oy: 0, px: 0, py: 0, aimX: 0, aimY: 0, fx: 0, fy: 0, cancel: false,
       cur: { vx: 0, vy: 0, pr: 0 }, vel: { vx: 0, vy: 0, pr: 0 }, goal: { vx: 0, vy: 0, pr: 0 },
     };
     const aim = () => {
@@ -291,7 +300,7 @@ void main() {
 
   function attract(G) {
     const held = G.btns.find(b => b.id !== null && b.active);
-    for (const b of G.btns) { b.goal.vx = b.aimX; b.goal.vy = b.aimY; b.goal.pr = b.id !== null ? 1 : 0; }
+    for (const b of G.btns) { b.goal.vx = b.fx; b.goal.vy = b.fy; b.goal.pr = b.id !== null ? 1 : 0; }
     let best = 0;
     if (held) {
       const th = xf(held);
@@ -303,23 +312,23 @@ void main() {
         const gy = Math.abs(dy) - (held.h / 2 * th.sy + Math.abs(th.vy) / 2 + o.h / 2 * to.sy + Math.abs(to.vy) / 2);
         const gap = Math.max(gx, gy);
         const rest = Math.max(Math.abs(o.cx - held.cx) - (held.w + o.w) / 2, Math.abs(o.cy - held.cy) - (held.h + o.h) / 2);
-        const start = rest - 3, full = -4;
+        const start = rest, full = rest - 8;
         let f = Math.min(1, Math.max(0, (start - gap) / (start - full)));
         f = f * f * (3 - 2 * f);
         if (f <= 0) continue;
         const len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
-        o.goal.vx = -ux * 0.55 * f;
-        o.goal.vy = -uy * 0.55 * f;
-        held.goal.vx += ux * 0.3 * f;
-        held.goal.vy += uy * 0.3 * f;
+        o.goal.vx = -ux * 0.14 * f;
+        o.goal.vy = -uy * 0.14 * f;
+        held.goal.vx += ux * 0.06 * f;
+        held.goal.vy += uy * 0.06 * f;
         best = Math.max(best, f);
       }
       const m = Math.hypot(held.goal.vx, held.goal.vy);
       if (m > 0.92) { held.goal.vx *= 0.92 / m; held.goal.vy *= 0.92 / m; }
     }
-    G.k.goal = 2 + 18 * best;
+    G.k.goal = 2 + 10 * best;
     const snapped = best > 0.7;
-    if (snapped && !G.snapped) buzz(10);
+    if (snapped && !G.snapped) buzz(4);
     G.snapped = snapped;
   }
 
@@ -329,12 +338,14 @@ void main() {
   }
 
   function step(G, dt) {
+    const a = 1 - Math.exp(-dt / 0.018);
+    for (const b of G.btns) { b.fx += (b.aimX - b.fx) * a; b.fy += (b.aimY - b.fy) * a; }
     attract(G);
     const n = Math.max(1, Math.ceil(dt / 0.004)), h = dt / n;
     let live = false;
     for (const b of G.btns) {
       const held = b.id !== null;
-      const k = held ? 380 : 230, c = held ? 30 : 14;
+      const k = 300, c = 25;
       for (let i = 0; i < n; i++) for (const key in b.cur) {
         if (reduce) b.cur[key] = b.goal[key];
         else spring(b, key, b.goal[key], k, c, h);
