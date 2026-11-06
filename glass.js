@@ -29,7 +29,8 @@ float field(vec2 p, out float prim) {
     float ms = min(sq.x, sq.y);
     vec2 v = uXf[i].zw;
     vec2 av = sqrt(v * v + 0.25) - 0.5;
-    float di = sdBox((q0 - v * 0.5) / sq, uBox[i].zw + av * 0.5, uBox[i].w) * ms;
+    vec2 hb = uBox[i].zw + av * 0.5;
+    float di = sdBox((q0 - v * 0.5) / sq, hb, min(hb.x, hb.y)) * ms;
     float w = 1.0 / (1.0 + exp(clamp(di / 6.0, -20.0, 20.0)));
     ws += w;
     ps += w * uPrim[i];
