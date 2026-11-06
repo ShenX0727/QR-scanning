@@ -7,6 +7,7 @@ varying vec2 vUv;
 uniform vec2 uCanvas, uPage, uView, uLight;
 uniform vec4 uBox[${N}];
 uniform vec4 uXf[${N}];
+uniform vec2 uSq[${N}];
 uniform float uPrim[${N}];
 uniform float uK, uPress, uDark, uPanel;
 uniform vec3 uBase, uBlobA, uBlobB, uBlobC, uTint;
@@ -23,8 +24,14 @@ float field(vec2 p, out float prim) {
   float d = 1e5, ws = 0.0, ps = 0.0;
   for (int i = 0; i < ${N}; i++) {
     if (uBox[i].z < 0.5) continue;
-    vec2 q = (p - uBox[i].xy - uXf[i].xy) / uXf[i].zw;
-    float di = sdBox(q, uBox[i].zw, uBox[i].w) * min(uXf[i].z, uXf[i].w);
+    vec2 q0 = p - uBox[i].xy - uXf[i].xy;
+    vec2 sq = uSq[i];
+    float ms = min(sq.x, sq.y);
+    float di = 1e5;
+    for (int s = 0; s < 6; s++) {
+      vec2 q = (q0 - uXf[i].zw * (float(s) / 5.0)) / sq;
+      di = smin(di, sdBox(q, uBox[i].zw, uBox[i].w) * ms, 5.0);
+    }
     float w = 1.0 / (1.0 + exp(clamp(di / 6.0, -20.0, 20.0)));
     ws += w;
     ps += w * uPrim[i];
@@ -121,11 +128,14 @@ void main() {
 
   function xf(b) {
     const c = b.cur;
-    const ex = 1 + 0.32 * Math.abs(c.vx), ey = 1 + 0.5 * Math.abs(c.vy);
-    const sx = ex / Math.sqrt(ey) * (1 - 0.03 * c.pr), sy = ey / Math.sqrt(ex) * (1 - 0.07 * c.pr);
-    const ox = Math.sign(c.vx) * Math.max(0, sx - 1) * b.w / 2 * 0.85 + c.vx * 6;
-    const oy = Math.sign(c.vy) * Math.max(0, sy - 1) * b.h / 2 * 0.85 + c.vy * 5;
-    return { sx, sy, ox, oy };
+    const L = Math.hypot(c.vx, c.vy);
+    const ux = L > 1e-5 ? c.vx / L : 0, uy = L > 1e-5 ? c.vy / L : 0;
+    const reach = 44 * L;
+    const k = Math.min(1, reach / 40);
+    const sx = (1 - 0.03 * c.pr) * (1 - 0.1 * k * uy * uy);
+    const sy = (1 - 0.07 * c.pr) * (1 - 0.2 * k * ux * ux);
+    const vx = ux * reach, vy = uy * reach;
+    return { sx, sy, ox: -vx * 0.3, oy: -vy * 0.3, vx, vy };
   }
 
   function makeGroup(host) {
@@ -147,7 +157,7 @@ void main() {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const U = {};
-    for (const n of ['uCanvas', 'uPage', 'uView', 'uLight', 'uBox', 'uXf', 'uPrim', 'uK', 'uPress', 'uDark', 'uPanel', 'uBase', 'uBlobA', 'uBlobB', 'uBlobC', 'uTint']) U[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uCanvas', 'uPage', 'uView', 'uLight', 'uBox', 'uXf', 'uSq', 'uPrim', 'uK', 'uPress', 'uDark', 'uPanel', 'uBase', 'uBlobA', 'uBlobB', 'uBlobC', 'uTint']) U[n] = gl.getUniformLocation(prog, n);
 
     const G = { host, cv, gl, U, btns: [], w: 0, h: 0, rect: null, dirty: true, panel: !!host.closest('.panel'),
       k: { cur: 2, vel: 0, goal: 2 }, snapped: false, light: [0, 0] };
@@ -172,18 +182,19 @@ void main() {
 
     G.draw = () => {
       if (!G.w) return;
-      const box = new Float32Array(N * 4), tr = new Float32Array(N * 4), prim = new Float32Array(N);
+      const box = new Float32Array(N * 4), tr = new Float32Array(N * 4), sq = new Float32Array(N * 2).fill(1), prim = new Float32Array(N);
       let press = 0;
       G.btns.slice(0, N).forEach((b, i) => {
         const t = xf(b);
         b.t = t;
         if (b.active) {
           box.set([b.cx, b.cy, b.w / 2, b.h / 2], i * 4);
-          tr.set([t.ox, t.oy, t.sx, t.sy], i * 4);
-        } else tr.set([0, 0, 1, 1], i * 4);
+          tr.set([t.ox, t.oy, t.vx, t.vy], i * 4);
+          sq.set([t.sx, t.sy], i * 2);
+        }
         prim[i] = b.primary ? 1 : 0;
         press = Math.max(press, b.cur.pr);
-        b.lbl.style.transform = `translate3d(${(t.ox * 0.7).toFixed(2)}px, ${(t.oy * 0.7).toFixed(2)}px, 0)`;
+        b.lbl.style.transform = `translate3d(${(t.ox + t.vx * 0.5).toFixed(2)}px, ${(t.oy + t.vy * 0.5).toFixed(2)}px, 0)`;
       });
       gl.viewport(0, 0, cv.width, cv.height);
       gl.uniform2f(U.uCanvas, G.w + M * 2, G.h + M * 2);
@@ -192,6 +203,7 @@ void main() {
       gl.uniform2f(U.uLight, G.light[0], G.light[1]);
       gl.uniform4fv(U.uBox, box);
       gl.uniform4fv(U.uXf, tr);
+      gl.uniform2fv(U.uSq, sq);
       gl.uniform1fv(U.uPrim, prim);
       gl.uniform1f(U.uK, G.k.cur);
       gl.uniform1f(U.uPress, press);
@@ -227,7 +239,7 @@ void main() {
       cur: { vx: 0, vy: 0, pr: 0 }, vel: { vx: 0, vy: 0, pr: 0 }, goal: { vx: 0, vy: 0, pr: 0 },
     };
     const aim = () => {
-      const mx = (b.px - b.ox) / 90, my = (b.py - b.oy) / 60;
+      const mx = (b.px - b.ox) / 80, my = (b.py - b.oy) / 80;
       const m = Math.hypot(mx, my), r = m / (1 + m);
       b.aimX = m ? mx / m * r : 0;
       b.aimY = m ? my / m * r : 0;
@@ -286,9 +298,9 @@ void main() {
       for (const o of G.btns) {
         if (o === held || !o.active) continue;
         const to = xf(o);
-        const dx = (o.cx + to.ox) - (held.cx + th.ox), dy = (o.cy + to.oy) - (held.cy + th.oy);
-        const gx = Math.abs(dx) - (held.w / 2 * th.sx + o.w / 2 * to.sx);
-        const gy = Math.abs(dy) - (held.h / 2 * th.sy + o.h / 2 * to.sy);
+        const dx = (o.cx + to.ox + to.vx / 2) - (held.cx + th.ox + th.vx / 2), dy = (o.cy + to.oy + to.vy / 2) - (held.cy + th.oy + th.vy / 2);
+        const gx = Math.abs(dx) - (held.w / 2 * th.sx + Math.abs(th.vx) / 2 + o.w / 2 * to.sx + Math.abs(to.vx) / 2);
+        const gy = Math.abs(dy) - (held.h / 2 * th.sy + Math.abs(th.vy) / 2 + o.h / 2 * to.sy + Math.abs(to.vy) / 2);
         const gap = Math.max(gx, gy);
         const rest = Math.max(Math.abs(o.cx - held.cx) - (held.w + o.w) / 2, Math.abs(o.cy - held.cy) - (held.h + o.h) / 2);
         const start = rest - 3, full = -4;
