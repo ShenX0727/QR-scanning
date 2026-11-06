@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#e8eaf0" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#24272f" media="(prefers-color-scheme: dark)">
 <title>二维码识别</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <div class="shell">
@@ -24,7 +24,7 @@
       <span class="beam" aria-hidden="true"></span>
       <img id="preview" alt="待识别的图片" hidden>
       <span id="hint" class="hint">
-        <strong>放一张二维码图片</strong>
+        <strong class="idle">放一张二维码图片</strong><strong class="drag">松手就行</strong>
         <span class="desk">拖进来，或者 <kbd>Ctrl</kbd> <kbd>V</kbd></span>
         <span class="touch">点这里选图</span>
       </span>
@@ -39,7 +39,7 @@
     <p id="msg" class="msg" role="status"></p>
 
     <div id="empty" class="panel empty">
-      <p>识别出的内容会出现在这里</p>
+      <p>识别出的内容会出现在这里</p><p class="sub-hint">按 Esc 可以清空，重新来</p>
     </div>
 
     <article id="result" class="panel result" hidden>
@@ -61,7 +61,7 @@
   </section>
 </div>
 <script src="jsQR.js"></script>
-<script src="apps.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="apps.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

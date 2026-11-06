@@ -125,9 +125,12 @@ async function copy(s) {
     const ta = Object.assign(document.createElement('textarea'), { value: s });
     document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
   }
-  msg('已复制');
+  const btn = $('copyBtn');
+  btn.classList.add('copied');
+  btn.textContent = '已复制';
+  buzz(10);
   clearTimeout(copy.t);
-  copy.t = setTimeout(() => msg(''), 1600);
+  copy.t = setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '复制'; }, 1400);
 }
 
 function msg(s, err) {
@@ -189,55 +192,85 @@ async function handle(blob) {
   const text = await decode(img);
   if (!text) {
     state('fail');
+    buzz([20, 60, 20]);
     return msg('没找到二维码，换张清楚点的', true);
   }
   state('done');
+  buzz(12);
   render(text);
 }
 
+const buzz = p => { try { navigator.vibrate?.(p); } catch {} };
+
 function liquid(el) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  let box = null, id = null;
-  const move = e => {
-    if (e.pointerId !== id) return;
-    const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
-    const dx = Math.max(-1.8, Math.min(1.8, (e.clientX - cx) / (box.width / 2)));
-    const dy = Math.max(-1.8, Math.min(1.8, (e.clientY - cy) / (box.height / 2)));
-    const pullX = Math.max(0, Math.abs(dx) - 1), pullY = Math.max(0, Math.abs(dy) - 1);
-    const sx = 0.93 + Math.abs(dx) * 0.05 + pullX * 0.24 - pullY * 0.08;
-    const sy = 0.88 + Math.abs(dy) * 0.07 + pullY * 0.34 - pullX * 0.1;
-    el.style.transform = `translate(${dx * 5 + Math.sign(dx) * pullX * 16}px, ${dy * 4 + Math.sign(dy) * pullY * 12}px) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
-    el.style.setProperty('--mx', ((e.clientX - box.left) / box.width * 100) + '%');
-    el.style.setProperty('--my', ((e.clientY - box.top) / box.height * 100) + '%');
-    el.style.setProperty('--ox', (dx < 0 ? 100 : 0) + '%');
-    el.style.setProperty('--oy', (dy < 0 ? 100 : 0) + '%');
+  const rubber = v => v / (0.7 + Math.abs(v));
+  const cur = { x: 0, y: 0, sx: 1, sy: 1 };
+  const vel = { x: 0, y: 0, sx: 0, sy: 0 };
+  const goal = { x: 0, y: 0, sx: 1, sy: 1 };
+  let box = null, id = null, raf = 0, last = 0, px = 0, py = 0, ox = 0, oy = 0;
+
+  const aim = () => {
+    const ax = rubber((px - ox) / 60), ay = rubber((py - oy) / 40);
+    const nx = (ox - box.left - box.width / 2) / box.width, ny = (oy - box.top - box.height / 2) / box.height;
+    goal.x = ax * 14 + nx * 4;
+    goal.y = ay * 9 + ny * 3;
+    goal.sx = 0.96 + Math.abs(ax) * 0.13 - Math.abs(ay) * 0.04;
+    goal.sy = 0.92 + Math.abs(ay) * 0.17 - Math.abs(ax) * 0.06;
+    el.style.setProperty('--mx', (px - box.left) + 'px');
+    el.style.setProperty('--my', (py - box.top) + 'px');
   };
+
+  const frame = t => {
+    const dt = Math.min(0.032, last ? (t - last) / 1000 : 0.008);
+    last = t;
+    const k = id === null ? 210 : 520, c = id === null ? 13 : 34;
+    let moving = false;
+    for (let step = 0, n = Math.ceil(dt / 0.004); step < n; step++) {
+      const h = dt / n;
+      for (const key in cur) {
+        vel[key] += (k * (goal[key] - cur[key]) - c * vel[key]) * h;
+        cur[key] += vel[key] * h;
+      }
+    }
+    for (const key in cur) {
+      const eps = key[0] === 's' ? 0.0005 : 0.02;
+      if (Math.abs(goal[key] - cur[key]) > eps || Math.abs(vel[key]) > eps) moving = true;
+    }
+    if (!moving) Object.assign(cur, goal);
+    el.style.transform = `translate3d(${cur.x.toFixed(2)}px, ${cur.y.toFixed(2)}px, 0) scale(${cur.sx.toFixed(4)}, ${cur.sy.toFixed(4)})`;
+    raf = moving || id !== null ? requestAnimationFrame(frame) : 0;
+    if (!raf) last = 0;
+  };
+  const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
+
+  el.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    id = e.pointerId;
+    box = el.getBoundingClientRect();
+    box = { left: box.left - cur.x, top: box.top - cur.y, width: box.width / cur.sx, height: box.height / cur.sy };
+    try { el.setPointerCapture(id); } catch {}
+    px = ox = e.clientX; py = oy = e.clientY;
+    aim();
+    el.classList.add('pressed');
+    buzz(6);
+    kick();
+  });
+  el.addEventListener('pointermove', e => {
+    if (e.pointerId !== id) return;
+    px = e.clientX; py = e.clientY;
+    aim();
+    kick();
+  }, { passive: true });
   const end = e => {
     if (e.pointerId !== id) return;
     id = null;
     el.classList.remove('pressed');
-    el.style.removeProperty('--ox');
-    el.style.removeProperty('--oy');
-    el.style.transform = '';
+    Object.assign(goal, { x: 0, y: 0, sx: 1, sy: 1 });
+    vel.sy -= 1.2;
+    vel.sx += 0.8;
+    kick();
   };
-  el.addEventListener('pointerdown', e => {
-    if (e.button > 0) return;
-    id = e.pointerId;
-    el.style.transform = '';
-    box = el.getBoundingClientRect();
-    try { el.setPointerCapture(id); } catch {}
-    el.classList.add('pressed');
-    move(e);
-  });
-  el.addEventListener('pointermove', e => {
-    if (id === null) {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100) + '%');
-      el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100) + '%');
-      return;
-    }
-    move(e);
-  });
   el.addEventListener('pointerup', end);
   el.addEventListener('pointercancel', end);
   el.addEventListener('lostpointercapture', end);
@@ -268,7 +301,20 @@ $('pickBtn').onclick = () => $('file').click();
 $('file').onchange = e => { handle(e.target.files[0]); e.target.value = ''; };
 
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
-drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('dragleave', e => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over'); });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('result').hidden) reset();
+});
+
+function reset() {
+  state();
+  msg('');
+  $('result').hidden = true;
+  $('empty').hidden = false;
+  $('preview').hidden = true;
+  $('hint').hidden = false;
+}
 drop.addEventListener('drop', e => {
   e.preventDefault();
   drop.classList.remove('over');
