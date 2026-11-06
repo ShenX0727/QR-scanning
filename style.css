@@ -114,8 +114,7 @@ body::before {
   border-radius: 34px;
   background: var(--base);
   box-shadow: var(--in);
-  cursor: pointer; outline: none;
-  touch-action: manipulation;
+  cursor: default; outline: none;
 }
 .finder:focus-visible { box-shadow: var(--in), 0 0 0 3px var(--accent); }
 .finder.over { box-shadow: inset 10px 10px 22px var(--lo), inset -10px -10px 22px var(--hi); }
