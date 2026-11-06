@@ -301,15 +301,13 @@ void main() {
         const gy = Math.abs(dy) - ((held.h / 2 + th.ey) * th.sy + (o.h / 2 + to.ey) * to.sy);
         const gap = Math.max(gx, gy);
         const rest = Math.max(Math.abs(o.cx - held.cx) - (held.w + o.w) / 2, Math.abs(o.cy - held.cy) - (held.h + o.h) / 2);
-        const start = rest, full = rest - 8;
+        const start = 6, full = 0;
         let f = Math.min(1, Math.max(0, (start - gap) / (start - full)));
         f = f * f * (3 - 2 * f);
         if (f <= 0) continue;
         const len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
-        o.goal.vx = -ux * 0.14 * f;
-        o.goal.vy = -uy * 0.14 * f;
-        held.goal.vx += ux * 0.06 * f;
-        held.goal.vy += uy * 0.06 * f;
+        held.goal.vx += ux * 0.3 * f;
+        held.goal.vy += uy * 0.3 * f;
         best = Math.max(best, f);
       }
       const m = Math.hypot(held.goal.vx, held.goal.vy);
