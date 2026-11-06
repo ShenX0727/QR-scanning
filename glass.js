@@ -28,19 +28,8 @@ float field(vec2 p, out float prim) {
     vec2 sq = uSq[i];
     float ms = min(sq.x, sq.y);
     vec2 v = uXf[i].zw;
-    float tb = 0.0;
-    if (dot(v, v) > 1e-4) {
-      float lo = 0.0, hi = 1.0;
-      float a1 = mix(lo, hi, 0.381966), a2 = mix(lo, hi, 0.618034);
-      float f1 = sdBox((q0 - v * a1) / sq, uBox[i].zw, uBox[i].w);
-      float f2 = sdBox((q0 - v * a2) / sq, uBox[i].zw, uBox[i].w);
-      for (int s = 0; s < 12; s++) {
-        if (f1 < f2) { hi = a2; a2 = a1; f2 = f1; a1 = mix(lo, hi, 0.381966); f1 = sdBox((q0 - v * a1) / sq, uBox[i].zw, uBox[i].w); }
-        else { lo = a1; a1 = a2; f1 = f2; a2 = mix(lo, hi, 0.618034); f2 = sdBox((q0 - v * a2) / sq, uBox[i].zw, uBox[i].w); }
-      }
-      tb = 0.5 * (lo + hi);
-    }
-    float di = sdBox((q0 - v * tb) / sq, uBox[i].zw, uBox[i].w) * ms;
+    vec2 av = sqrt(v * v + 0.25) - 0.5;
+    float di = sdBox((q0 - v * 0.5) / sq, uBox[i].zw + av * 0.5, uBox[i].w) * ms;
     float w = 1.0 / (1.0 + exp(clamp(di / 6.0, -20.0, 20.0)));
     ws += w;
     ps += w * uPrim[i];
