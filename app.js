@@ -203,7 +203,6 @@ async function handle(blob) {
 
 const buzz = p => { try { navigator.vibrate?.(p); } catch {} };
 
-$('count').textContent = `认得 ${APPS.length} 个应用`;
 
 document.addEventListener('paste', e => {
   const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
